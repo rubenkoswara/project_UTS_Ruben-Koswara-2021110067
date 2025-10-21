@@ -207,7 +207,6 @@ class CustomerController extends Controller
         $orders = collect([
             ['id' => 'ORD-001', 'date' => '2025-10-10', 'total' => 260000, 'status' => 'Dikirim'],
             ['id' => 'ORD-002', 'date' => '2025-10-05', 'total' => 440000, 'status' => 'Selesai'],
-            ['id' => 'ORD-003', 'date' => '2025-10-20', 'total' => 150000, 'status' => 'Menunggu Pembayaran'],
         ])->map(function ($order) {
             $order['total_formatted'] = $this->formatRupiah($order['total']);
             return $order;

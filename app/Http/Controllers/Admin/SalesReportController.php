@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Http\Response;
 
-// use Maatwebsite\Excel\Facades\Excel; // Baris ini dan baris import package di bawah dihapus atau dibiarkan sebagai komentar sesuai permintaan user.
-// use App\Exports\SalesExport; 
-// use Barryvdh\DomPDF\Facade\Pdf; 
+use Barryvdh\DomPDF\Facade\Pdf;
+
+
+
 
 class SalesReportController extends Controller
 {
+    
     /**
      * Helper function untuk mendapatkan semua data dummy penjualan mentah.
      * Dalam proyek nyata, ini akan mengambil data dari Model/Eloquent.
@@ -21,10 +24,13 @@ class SalesReportController extends Controller
      */
     private function getRawSalesData(): Collection
     {
+        // Tetapkan waktu lokal saat ini untuk data dummy
+        Carbon::setLocale('id');
+
         return collect([
             // Data dummy penjualan Selesai (Completed Sales)
             ['id' => 'ORD-001', 'customer' => 'Adi Pradana', 'total' => 571000, 'date' => '2025-10-18', 'status' => 'Selesai'],
-            ['id' => 'ORD-002', 'customer' => 'Budi Santoso', 'total' => 847700, 'date' => '2025-10-18', 'status' => 'Selesai'],
+            ['id' => 'ORD-002', 'customer' => 'Budi Santoso', 'total' => 847700, 'date' => '2025-10-21', 'status' => 'Selesai'], // Hari ini
             ['id' => 'ORD-003', 'customer' => 'Citra Dewi', 'total' => 150000, 'date' => '2025-10-19', 'status' => 'Selesai'],
             ['id' => 'ORD-004', 'customer' => 'Dian Kurnia', 'total' => 260000, 'date' => '2025-10-19', 'status' => 'Selesai'],
             ['id' => 'ORD-005', 'customer' => 'Eko Nurcahyo', 'total' => 420000, 'date' => '2025-10-20', 'status' => 'Selesai'],
@@ -32,6 +38,7 @@ class SalesReportController extends Controller
             ['id' => 'ORD-008', 'customer' => 'Hana Wijaya', 'total' => 310000, 'date' => '2025-10-16', 'status' => 'Selesai'],
             ['id' => 'ORD-009', 'customer' => 'Irfan Hakim', 'total' => 990000, 'date' => '2025-10-17', 'status' => 'Selesai'],
             ['id' => 'ORD-010', 'customer' => 'Joko Susilo', 'total' => 200000, 'date' => '2025-10-20', 'status' => 'Selesai'],
+            ['id' => 'ORD-011', 'customer' => 'Kevin Tan', 'total' => 120000, 'date' => '2025-09-25', 'status' => 'Selesai'], // Bulan lalu
             
             // Data order lain (Misalnya status Dikirim)
             ['id' => 'ORD-006', 'customer' => 'Fani Lestari', 'total' => 120000, 'date' => '2025-10-20', 'status' => 'Dikirim'],
@@ -40,6 +47,36 @@ class SalesReportController extends Controller
             $sale['date'] = Carbon::parse($sale['date']);
             return $sale;
         });
+    }
+
+    /**
+     * Helper untuk menentukan rentang tanggal
+     */
+    private function calculateDateRange(string $filter): array
+    {
+        $now = Carbon::now();
+        $start_date = null;
+        $end_date = null;
+
+        if ($filter === 'today') {
+            $start_date = $now->copy()->startOfDay();
+            $end_date = $now->copy()->endOfDay();
+        } elseif ($filter === 'weekly') {
+            // Minggu ini, dari Senin hingga sekarang/akhir hari ini
+            $start_date = $now->copy()->startOfWeek();
+            $end_date = $now->copy()->endOfDay();
+        } elseif ($filter === 'monthly') {
+            // Bulan ini, dari tanggal 1 hingga sekarang/akhir hari ini
+            $start_date = $now->copy()->startOfMonth();
+            $end_date = $now->copy()->endOfDay();
+        }
+        // Jika 'all', biarkan null
+
+        // Pastikan tanggal diformat sebagai string Y-m-d untuk konsistensi di view/export
+        return [
+            'start_date' => $start_date ? $start_date->toDateString() : null,
+            'end_date' => $end_date ? $end_date->toDateString() : null,
+        ];
     }
 
     /**
@@ -52,24 +89,22 @@ class SalesReportController extends Controller
     private function getFilteredSalesData(string $filter): array
     {
         $allSales = $this->getRawSalesData();
-        
-        // 1. Filter hanya data penjualan yang statusnya 'Selesai'
+        $range = $this->calculateDateRange($filter);
+
         $completed_sales = $allSales->filter(fn($s) => $s['status'] === 'Selesai');
         
-        // 2. Filter berdasarkan periode waktu
-        $filtered_sales = $completed_sales->filter(function ($sale) use ($filter) {
-            $date = $sale['date'];
-            
-            if ($filter === 'today') {
-                return $date->isToday();
-            } elseif ($filter === 'weekly') {
-                // Dianggap dari hari Senin hingga hari ini
-                return $date->between(Carbon::now()->startOfWeek(), Carbon::now()->endOfDay());
-            } elseif ($filter === 'monthly') {
-                return $date->isCurrentMonth();
+        // 2. Filter berdasarkan rentang tanggal yang didapat
+        $filtered_sales = $completed_sales->filter(function ($sale) use ($range) {
+            if (!$range['start_date'] || !$range['end_date']) {
+                return true; // Filter 'all'
             }
-            return true; // 'all'
-        })->values(); // Reset keys setelah filtering
+
+            $date = $sale['date'];
+            $start = Carbon::parse($range['start_date'])->startOfDay();
+            $end = Carbon::parse($range['end_date'])->endOfDay();
+
+            return $date->between($start, $end);
+        })->values();
 
         // 3. Hitung Statistik
         $total_revenue = $filtered_sales->sum('total');
@@ -85,17 +120,19 @@ class SalesReportController extends Controller
         });
 
         return [
-            'sales' => $sales_data_formatted, // Data yang diformat untuk ditampilkan di View
-            'raw_data' => $filtered_sales->toArray(), // Data mentah untuk export (jika diperlukan)
+            'sales' => $sales_data_formatted,
+            'raw_data' => $filtered_sales->toArray(),
             'total_revenue' => 'Rp ' . number_format($total_revenue, 0, ',', '.'),
             'total_orders' => $total_orders,
             'average_sale' => 'Rp ' . number_format($average_sale, 0, ',', '.'),
+            'start_date' => $range['start_date'],
+            'end_date' => $range['end_date'],
         ];
     }
     
     /**
      * Menampilkan halaman utama laporan penjualan.
-     * * @param Request $request
+     * @param Request $request
      * @return \Illuminate\View\View
      */
     public function index(Request $request)
@@ -109,12 +146,14 @@ class SalesReportController extends Controller
             'total_revenue' => $data['total_revenue'],
             'total_orders' => $data['total_orders'],
             'average_sale' => $data['average_sale'],
-            'filter' => $filter, // Kirim filter kembali ke view untuk mempertahankan pilihan
+            'filter' => $filter, 
+            'start_date' => $data['start_date'],
+            'end_date' => $data['end_date'],
         ]);
     }
 
     /**
-     * Export Laporan Penjualan ke format Excel (.xlsx).
+     * Export Laporan Penjualan ke format Excel (simulasi menggunakan CSV).
      *
      * @param Request $request
      * @return \Illuminate\Http\Response
@@ -123,11 +162,47 @@ class SalesReportController extends Controller
     {
         $filter = $request->get('filter', 'all');
         $data = $this->getFilteredSalesData($filter);
-        $fileName = 'LaporanPenjualan_' . ucfirst($filter) . '_' . Carbon::now()->format('Ymd_His') . '.xlsx';
+        $exportData = $data['raw_data'];
+        
+        $range = $this->calculateDateRange($filter);
+        $fileNameSuffix = $range['start_date'] && $range['end_date'] 
+                        ? $range['start_date'] . '_to_' . $range['end_date'] 
+                        : 'AllData';
+                        
+        $fileName = 'LaporanPenjualan_' . $fileNameSuffix . '_' . Carbon::now()->format('Ymd_His') . '.csv';
+        
+        // 1. Siapkan header CSV
+        $headers = [
+            'Content-type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=$fileName",
+            'Pragma'              => 'no-cache',
+            'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires'             => '0',
+        ];
 
-        // Ganti baris di bawah ini dengan implementasi export Excel yang sesungguhnya (misal menggunakan package Maatwebsite)
-        $count = count($data['raw_data']);
-        return back()->with('success', "Sukses! $count baris data penjualan periode " . ucfirst($filter) . " siap diunduh sebagai Excel ($fileName).");
+        // 2. Siapkan konten CSV
+        $callback = function() use ($exportData)
+        {
+            $file = fopen('php://output', 'w');
+            
+            // Kolom Header
+            fputcsv($file, ['No. Order', 'Tanggal', 'Customer', 'Total Penjualan', 'Status']);
+
+            // Isi Data
+            foreach ($exportData as $sale) {
+                fputcsv($file, [
+                    $sale['id'],
+                    $sale['date']->toDateString(), // Gunakan tanggal mentah untuk export
+                    $sale['customer'],
+                    $sale['total'], // Gunakan total mentah (angka)
+                    $sale['status']
+                ]);
+            }
+            fclose($file);
+        };
+
+        // 3. Kembalikan respons stream
+        return response()->stream($callback, 200, $headers);
     }
 
     /**
@@ -140,10 +215,46 @@ class SalesReportController extends Controller
     {
         $filter = $request->get('filter', 'all');
         $data = $this->getFilteredSalesData($filter);
-        $fileName = 'LaporanPenjualan_' . ucfirst($filter) . '_' . Carbon::now()->format('Ymd_His') . '.pdf';
+        $exportData = $data['sales']; 
+        
+        $range = $this->calculateDateRange($filter);
+        $fileNameSuffix = $range['start_date'] && $range['end_date'] 
+                        ? $range['start_date'] . '_to_' . $range['end_date'] 
+                        : 'AllData';
+                        
+        $fileName = 'LaporanPenjualan_' . $fileNameSuffix . '_' . Carbon::now()->format('Ymd_His') . '.pdf';
 
-        // Ganti baris di bawah ini dengan implementasi export PDF yang sesungguhnya (misal menggunakan package DomPDF)
-        $count = count($data['raw_data']);
-        return back()->with('success', "Sukses! $count baris data penjualan periode " . ucfirst($filter) . " siap dibuat sebagai PDF ($fileName).");
+        // ------------------------------------------------------------------------
+        // IMPLEMENTASI NYATA DENGAN DOMPDF (DIASUMSIKAN PACKAGE SUDAH TERINSTAL)
+        // ------------------------------------------------------------------------
+        
+        $pdf = Pdf::loadView('exports.sales_pdf', [
+            'sales' => $exportData,
+            'total_revenue' => $data['total_revenue'],
+            'total_orders' => $data['total_orders'],
+            'filter_label' => ucfirst($filter),
+            'start_date' => $range['start_date'],
+            'end_date' => $range['end_date']
+        ]);
+
+        // 2. Return the PDF file as a download
+        return $pdf->download($fileName); 
+    
+
+        // ------------------------------------------------------------------------
+        // SIMULASI KETIKA DOMPDF BELUM TERINSTAL (Mengembalikan Response Kosong PDF)
+        // ------------------------------------------------------------------------
+        
+        // Membuat respons kosong dengan header PDF
+        $count = count($exportData);
+        $content = "%PDF-1.4\n%DUMMY PDF CONTENT\n"; // Konten minimal untuk file PDF
+        
+        return response($content)
+            ->withHeaders([
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => "attachment; filename=\"$fileName\"",
+                'Content-Length' => strlen($content),
+            ])
+            ->with('success', "Sukses! **$count** baris data penjualan periode **" . ucfirst($filter) . "** ($fileNameSuffix) siap dibuat sebagai PDF ($fileName).");
     }
 }
