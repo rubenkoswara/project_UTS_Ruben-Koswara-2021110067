@@ -62,7 +62,7 @@ class CustomerController extends Controller
     public function index(Request $request)
     {
         $all_products = $this->getProductData();
-        
+
         // Ambil kategori dari data produk dan pastikan unik
         $categories = $all_products->pluck('category')->unique()->values()->all();
         array_unshift($categories, 'Semua'); // Tambahkan 'Semua' di awal
@@ -76,7 +76,7 @@ class CustomerController extends Controller
                 return strtolower($product['category']) === strtolower($filter_category);
             });
         }
-        
+
         // Format harga produk untuk ditampilkan di view
         $products = $products->map(function ($product) {
             $product['price_formatted'] = $this->formatRupiah($product['price']);
@@ -96,14 +96,14 @@ class CustomerController extends Controller
     public function productDetail($id)
     {
         $product = $this->getProductData()->firstWhere('id', (int)$id);
-        
+
         if (!$product) {
             abort(404, 'Produk tidak ditemukan.');
         }
 
         // Format harga di detail produk
         $product['price_formatted'] = $this->formatRupiah($product['price']);
-        
+
         return view('customer.product_detail', compact('product'));
     }
 
@@ -117,7 +117,7 @@ class CustomerController extends Controller
 
         $cart_items_raw = [
             // id: 1
-            ['id' => 1, 'qty' => 1, 'price' => 150000], 
+            ['id' => 1, 'qty' => 1, 'price' => 150000],
             // id: 2
             ['id' => 2, 'qty' => 2, 'price' => 55000],
             // id: 102
@@ -131,18 +131,19 @@ class CustomerController extends Controller
             return [
                 'name' => $product['name'],
                 'qty' => $item['qty'],
+                'quantity' => $item['qty'], // Ditambahkan untuk konsistensi dengan view checkout
                 'price' => $product['price'],
                 'subtotal' => $subtotal,
                 'price_formatted' => $this->formatRupiah($product['price']),
                 'subtotal_formatted' => $this->formatRupiah($subtotal),
             ];
         });
-        
+
         $total = $cart_items->sum('subtotal');
         $total_formatted = $this->formatRupiah($total);
-        
+
         return view('customer.cart', [
-            'cart_items' => $cart_items, 
+            'cart_items' => $cart_items,
             'total' => $total_formatted
         ]);
     }
@@ -156,7 +157,7 @@ class CustomerController extends Controller
         $cart_data = $this->cart()->getData();
         $cart_items = $cart_data['cart_items']; // Ini sudah terformat
         $grand_total_formatted = $cart_data['total'];
-        
+
         // Hitung grand_total integer dari item untuk perhitungan
         $grand_total = $cart_items->sum(function($item) {
             return $item['subtotal'];
@@ -167,10 +168,10 @@ class CustomerController extends Controller
             'name' => 'Nama Customer Dummy',
             'address' => 'Jl. Laragon No. 10, Bandung'
         ];
-        
+
         // Data Ringkasan Pesanan
         $order_data = [
-            'id' => 'ORD-' . rand(100, 999), 
+            'id' => 'ORD-' . rand(100, 999),
             'total_formatted' => $grand_total_formatted
         ];
 
@@ -183,12 +184,12 @@ class CustomerController extends Controller
     public function paymentInstruction()
     {
         // Menggunakan total dari cart/checkout (440000)
-        $grand_total = 440000; 
-        
+        $grand_total = 440000;
+
         // Data yang dikirim ke halaman instruksi
         $order_data = [
             'id' => 'ORD-003',
-            'total' => $grand_total, 
+            'total' => $grand_total,
             'total_formatted' => $this->formatRupiah($grand_total),
             'due_date' => Carbon::now()->addHours(24)->format('Y-m-d H:i'),
             'payment_methods' => [
@@ -222,7 +223,7 @@ class CustomerController extends Controller
     {
         $orders = collect([
             // ID harus unik dan konsisten untuk detail order
-            ['id' => 'ORD-001', 'date' => '2025-10-10', 'total' => 260000, 'status' => 'Dikirim'], 
+            ['id' => 'ORD-001', 'date' => '2025-10-10', 'total' => 260000, 'status' => 'Dikirim'],
             ['id' => 'ORD-002', 'date' => '2025-10-05', 'total' => 440000, 'status' => 'Selesai'],
         ])->map(function ($order) {
             $order['total_formatted'] = $this->formatRupiah($order['total']);
@@ -248,18 +249,18 @@ class CustomerController extends Controller
                 ['product_name' => 'Pakan Udang Hias', 'price' => 40000, 'quantity' => 1],
                 ['product_name' => 'Filter Gantung External', 'price' => 55000, 'quantity' => 1],
             ];
-        } 
+        }
         // Data items dummy untuk ORD-002 (Total: 440000 - Sesuai Cart)
         elseif ($id === 'ORD-002') {
-             $items_dummy = [
+            $items_dummy = [
                 ['product_name' => 'Aquarium Mini 10L', 'price' => 150000, 'quantity' => 1],
                 ['product_name' => 'Filter Gantung External', 'price' => 55000, 'quantity' => 2],
                 ['product_name' => 'Lampu LED Aquascape 40cm RGB', 'price' => 180000, 'quantity' => 1],
             ];
-        } 
+        }
         // Default items
         else {
-             $items_dummy = [
+            $items_dummy = [
                 ['product_name' => 'Produk Default', 'price' => 100000, 'quantity' => 1],
                 ['product_name' => 'Produk Kedua', 'price' => 50000, 'quantity' => 1],
             ];
@@ -269,22 +270,22 @@ class CustomerController extends Controller
             $item['subtotal'] = $item['price'] * $item['quantity'];
             $item['price_formatted'] = $this->formatRupiah($item['price']);
             $item['subtotal_formatted'] = $this->formatRupiah($item['subtotal']);
-            return (object)$item; 
+            return (object)$item;
         });
-        
+
         $total = $items_formatted->sum('subtotal');
-        
+
         // Data Pesanan lengkap yang diperlukan view
         $order = (object)[
-            'id' => $id, 
-            'status' => $id === 'ORD-002' ? 'Selesai' : 'Dikirim', 
-            'payment_method' => 'Transfer Bank', 
+            'id' => $id,
+            'status' => $id === 'ORD-002' ? 'Selesai' : 'Dikirim',
+            'payment_method' => 'Transfer Bank',
             'total_amount' => $total,
             'total_formatted' => $this->formatRupiah($total),
             'shipping_address' => 'Jl. Laragon No. 10, Kota Bandung, Jawa Barat (Kode Pos: 40286)',
             'created_at' => Carbon::parse($id === 'ORD-002' ? '2025-10-05 09:15:00' : '2025-10-10 10:30:00'),
             'items' => $items_formatted,
-            'payment_proof_url' => 'https://placehold.co/400x400/000000/FFFFFF/png?text=Bukti+Transfer' 
+            'payment_proof_url' => 'https://placehold.co/400x400/000000/FFFFFF/png?text=Bukti+Transfer'
         ];
 
         return view('customer.order_detail', compact('order'));
