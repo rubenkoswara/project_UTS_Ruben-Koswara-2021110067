@@ -117,7 +117,7 @@
                         <p class="text-sm text-gray-600 mb-4">Lihat statistik, ringkasan pendapatan, dan ekspor data ke Excel/PDF.</p> {{-- Deskripsi --}}
 
                         {{-- Dummy Statistik --}}
-                        <p class="text-4xl font-bold text-red-900 mb-1">Rp 12,8 Jt</p>
+                        <p class="text-4xl font-bold text-red-900 mb-1">Rp 4,3 Jt</p>
                         <p class="text-sm text-gray-600 mb-4">Pendapatan Bulan Ini</p>
                     </div>
                     
