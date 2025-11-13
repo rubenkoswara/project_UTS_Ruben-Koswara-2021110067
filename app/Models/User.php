@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail; // Non-aktifkan jika tidak diperlukan
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Order;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -22,7 +24,6 @@ class User extends Authenticatable
         'email',
         'password',
         'is_admin',
-        // BARIS BARU WAJIB: Tambahkan kolom profil tambahan di sini
         'phone_number',
         'date_of_birth',
         'address',
@@ -48,8 +49,12 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            // BARIS BARU WAJIB: Cast tanggal lahir sebagai tipe data Date
-            'date_of_birth' => 'date', 
+            'date_of_birth' => 'date',
         ];
     }
+
+    public function orders(): HasMany
+{
+    return $this->hasMany(Order::class); 
+}
 }
